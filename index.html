@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>micro:bit NeoPixel 8x8 Designer</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://unpkg.com/microbit-connection/dist/microbit-connection.umd.js" defer></script>
+    <script type="module" src="app.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <h1>micro:bit NeoPixel Designer (8×8)</h1>
+      <p class="subheading">
+        Design a pattern for an 8×8 NeoPixel matrix on <code>pin0</code>, then push it to a connected micro:bit.
+      </p>
+
+      <section class="toolbar" aria-label="Drawing tools">
+        <label>
+          Paint color
+          <input type="color" id="paint-color" value="#00ffcc" />
+        </label>
+        <button id="draw-mode" class="active">Draw</button>
+        <button id="erase-mode">Erase</button>
+        <button id="fill-grid">Fill</button>
+        <button id="clear-grid">Clear</button>
+      </section>
+
+      <section class="panel">
+        <div id="grid" class="grid" role="grid" aria-label="NeoPixel 8 by 8 editor"></div>
+        <aside class="controls">
+          <button id="connect-button">Connect micro:bit</button>
+          <button id="push-button" disabled>Push to micro:bit</button>
+          <p id="status" aria-live="polite">Status: waiting for connection.</p>
+          <details>
+            <summary>Generated MicroPython preview</summary>
+            <pre id="python-preview"></pre>
+          </details>
+        </aside>
+      </section>
+    </main>
+  </body>
+</html>
