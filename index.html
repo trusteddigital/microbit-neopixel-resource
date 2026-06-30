@@ -8,45 +8,81 @@
     <script type="module" src="app.js"></script>
   </head>
   <body>
-    <main>
-      <h1>micro:bit designer</h1>
-      <p class="subheading">
-        Design a pattern for an 8×8 NeoPixel matrix on <code>pin0</code>, then push it to a connected micro:bit.
-      </p>
+    <header class="site-header">
+      <img src="logo.png" alt="RGS Newcastle" class="site-logo" />
+      <div class="site-title">
+        <h1>NeoPixel Designer</h1>
+        <p class="subheading">
+          Paint an 8×8 NeoPixel pattern, then beam it to a connected micro:bit on <code>pin16</code>.
+        </p>
+      </div>
+    </header>
 
+    <main>
       <section class="toolbar" aria-label="Drawing tools">
-        <label>
-          Paint color
-          <input type="color" id="paint-color" value="#00ffcc" />
-        </label>
-        <button id="draw-mode" class="active">Draw</button>
-        <button id="erase-mode">Erase</button>
-        <button id="fill-grid">Fill</button>
-        <button id="clear-grid">Clear</button>
-        <button id="import-image" type="button">📷 Import Image</button>
-        <input id="image-file-input" type="file" accept="image/*" style="display:none" />
-        <span class="toolbar-divider">or</span>
-        <div class="preset-group">
-          <button id="preset-christmas" class="preset-btn" title="Christmas Tree">🎄</button>
-          <button id="preset-rainbow"   class="preset-btn" title="Rainbow">🌈</button>
-          <button id="preset-pacman"    class="preset-btn" title="Pac-Man">👾</button>
-          <button id="preset-mario"     class="preset-btn" title="Mario">🍄</button>
-          <button id="preset-pattern"   class="preset-btn" title="Pattern">✨</button>
+        <div class="tool-block">
+          <span class="tool-label">Colour</span>
+          <div class="color-row">
+            <input type="color" id="paint-color" value="#00ffcc" />
+            <div id="recent-colors" class="recent-colors" aria-label="Recent colours"></div>
+          </div>
         </div>
+
+        <div class="tool-block">
+          <span class="tool-label">Canvas</span>
+          <div class="btn-row">
+            <button id="fill-grid" type="button">Fill</button>
+            <button id="clear-grid" type="button">Clear</button>
+            <button id="import-image" type="button">Import image</button>
+            <input id="image-file-input" type="file" accept="image/*" hidden />
+          </div>
+        </div>
+
+        <div class="tool-block">
+          <span class="tool-label">Presets</span>
+          <div class="preset-group">
+            <button id="preset-christmas" class="preset-btn" type="button" title="Christmas Tree">🎄</button>
+            <button id="preset-rainbow"   class="preset-btn" type="button" title="Rainbow">🌈</button>
+            <button id="preset-pacman"    class="preset-btn" type="button" title="Pac-Man">👾</button>
+            <button id="preset-mario"     class="preset-btn" type="button" title="Mario">🍄</button>
+            <button id="preset-pattern"   class="preset-btn" type="button" title="Pattern">✨</button>
+          </div>
+        </div>
+
+        <p class="paint-hint">Left-click to paint · Right-click to erase</p>
       </section>
 
-      <section class="panel">
-        <div id="grid" class="grid" role="grid" aria-label="NeoPixel 8 by 8 editor"></div>
+      <section class="workspace">
+        <div class="tv">
+          <div class="tv-cabinet">
+            <div class="tv-screen-frame">
+              <div class="tv-screen">
+                <div id="grid" class="grid" role="grid" aria-label="NeoPixel 8 by 8 editor"></div>
+                <div class="screen-glare" aria-hidden="true"></div>
+                <div class="screen-scanlines" aria-hidden="true"></div>
+              </div>
+            </div>
+            <div class="tv-panel">
+              <span class="tv-brand">RGS&middot;TV</span>
+              <span class="tv-led" title="Power"></span>
+              <span class="tv-knob"></span>
+              <span class="tv-knob"></span>
+              <span class="tv-speaker" aria-hidden="true"></span>
+            </div>
+          </div>
+          <div class="tv-stand" aria-hidden="true"></div>
+        </div>
+
         <aside class="controls">
           <div class="connect-group">
-            <button id="connect-usb">🔌 Connect USB</button>
-            <button id="connect-bluetooth">📡 Connect Bluetooth</button>
+            <button id="connect-usb" type="button">Connect USB</button>
+            <button id="connect-bluetooth" type="button">Connect Bluetooth</button>
           </div>
-          <button id="push-button" disabled>Push to micro:bit</button>
+          <button id="push-button" class="push-btn" type="button" disabled>Push to micro:bit</button>
           <p id="status" aria-live="polite">Status: waiting for connection.</p>
 
-          <details>
-            <summary>Generated MicroPython preview</summary>
+          <details class="preview">
+            <summary>MicroPython preview</summary>
             <pre id="python-preview"></pre>
           </details>
         </aside>

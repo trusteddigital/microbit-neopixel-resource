@@ -8,8 +8,7 @@ const PIXEL_COUNT = GRID_WIDTH * GRID_HEIGHT;
 
 const gridEl = document.querySelector('#grid');
 const colorInput = document.querySelector('#paint-color');
-const drawModeBtn = document.querySelector('#draw-mode');
-const eraseModeBtn = document.querySelector('#erase-mode');
+const recentColorsEl = document.querySelector('#recent-colors');
 const fillGridBtn = document.querySelector('#fill-grid');
 const clearGridBtn = document.querySelector('#clear-grid');
 const connectUsbButton = document.querySelector('#connect-usb');
@@ -18,9 +17,11 @@ const pushButton = document.querySelector('#push-button');
 const statusEl = document.querySelector('#status');
 const pythonPreviewEl = document.querySelector('#python-preview');
 
+const RECENT_LIMIT = 10; // 5 × 2 palette
 const colors = Array.from({ length: PIXEL_COUNT }, () => '#000000');
-let paintMode = 'draw';
+let recentColors = [];
 let isPainting = false;
+let strokeErases = false; // true while a right-click stroke is active
 let microbit = null;
 
 const BRIGHTNESS = 0.4; // 0.0 → 1.0
@@ -75,57 +76,55 @@ const setStatus = (message) => {
   statusEl.textContent = `Status: ${message}`;
 };
 
-let debugContainer = null;
-
-const getDebugContainer = () => {
-  if (!debugContainer) {
-    debugContainer = document.createElement('div');
-    debugContainer.id = 'debug-log';
-    debugContainer.style.marginTop = '12px';
-    debugContainer.style.padding = '8px';
-    debugContainer.style.backgroundColor = '#f5f5f5';
-    debugContainer.style.borderRadius = '4px';
-    debugContainer.style.maxHeight = '150px';
-    debugContainer.style.overflowY = 'auto';
-    statusEl.parentElement.appendChild(debugContainer);
-    
-    const clearBtn = document.createElement('button');
-    clearBtn.textContent = 'Clear Debug Log';
-    clearBtn.style.fontSize = '12px';
-    clearBtn.style.marginTop = '8px';
-    clearBtn.style.padding = '4px 8px';
-    clearBtn.onclick = () => {
-      debugContainer.innerHTML = '';
-      console.clear();
-    };
-    debugContainer.parentElement.appendChild(clearBtn);
-  }
-  return debugContainer;
-};
-
 const debug = (message) => {
-  console.log(`[DEBUG] ${message}`);
-  const container = getDebugContainer();
-  const debugLine = document.createElement('div');
-  debugLine.style.fontSize = '10px';
-  debugLine.style.color = '#666';
-  debugLine.style.fontFamily = 'monospace';
-  debugLine.style.marginTop = '2px';
-  debugLine.textContent = `🔧 ${message}`;
-  container.appendChild(debugLine);
-  container.scrollTop = container.scrollHeight;
+  console.log(`[micro:bit] ${message}`);
 };
 
 const render = () => {
   [...gridEl.children].forEach((cell, i) => {
     cell.style.backgroundColor = colors[i];
+    cell.classList.toggle('lit', colors[i] !== '#000000');
   });
   pythonPreviewEl.textContent = toPython();
 };
 
 const applyColor = (idx) => {
-  colors[idx] = paintMode === 'erase' ? '#000000' : colorInput.value;
+  colors[idx] = strokeErases ? '#000000' : colorInput.value;
 };
+
+// ── Recent colours palette (5 × 2) ────────────────────────────
+const addRecentColor = (hex) => {
+  const value = hex.toLowerCase();
+  recentColors = [value, ...recentColors.filter((c) => c !== value)].slice(0, RECENT_LIMIT);
+  renderRecentColors();
+};
+
+const renderRecentColors = () => {
+  recentColorsEl.innerHTML = '';
+  const selected = colorInput.value.toLowerCase();
+  for (let i = 0; i < RECENT_LIMIT; i += 1) {
+    const swatch = document.createElement('button');
+    swatch.type = 'button';
+    swatch.className = 'swatch';
+    const hex = recentColors[i];
+    if (hex) {
+      swatch.style.backgroundColor = hex;
+      swatch.title = hex;
+      swatch.classList.toggle('selected', hex === selected);
+      swatch.addEventListener('click', () => {
+        colorInput.value = hex;
+        renderRecentColors();
+      });
+    } else {
+      swatch.classList.add('empty');
+      swatch.disabled = true;
+    }
+    recentColorsEl.append(swatch);
+  }
+};
+
+colorInput.addEventListener('change', () => addRecentColor(colorInput.value));
+colorInput.addEventListener('input', renderRecentColors);
 
 // ── Image import ──────────────────────────────────────────────
 const imageFileInput = document.querySelector('#image-file-input');
@@ -271,7 +270,7 @@ const loadImageToGrid = (file) => {
       const r = stretch(d[i*4]);
       const g = stretch(d[i*4+1]);
       const b = stretch(d[i*4+2]);
-      colors[i] = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '00')}`;
+      colors[i] = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
     }
 
     URL.revokeObjectURL(url);
@@ -296,7 +295,9 @@ const createGrid = () => {
     btn.className = 'pixel';
     btn.type = 'button';
     btn.dataset.index = i;
-    btn.addEventListener('mousedown', () => {
+    btn.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      strokeErases = event.button === 2; // right-click erases
       isPainting = true;
       applyColor(i);
       render();
@@ -309,15 +310,10 @@ const createGrid = () => {
     gridEl.append(btn);
   }
 
+  gridEl.addEventListener('contextmenu', (event) => event.preventDefault());
   document.addEventListener('mouseup', () => {
     isPainting = false;
   });
-};
-
-const setPaintMode = (mode) => {
-  paintMode = mode;
-  drawModeBtn.classList.toggle('active', mode === 'draw');
-  eraseModeBtn.classList.toggle('active', mode === 'erase');
 };
 
 const createMicrobitAdapter = () => {
@@ -467,9 +463,6 @@ pushButton.addEventListener('click', async () => {
   }
 });
 
-drawModeBtn.addEventListener('click', () => setPaintMode('draw'));
-eraseModeBtn.addEventListener('click', () => setPaintMode('erase'));
-
 fillGridBtn.addEventListener('click', () => {
   colors.fill(colorInput.value);
   render();
@@ -481,4 +474,5 @@ clearGridBtn.addEventListener('click', () => {
 });
 
 createGrid();
+addRecentColor(colorInput.value);
 render();
