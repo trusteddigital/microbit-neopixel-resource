@@ -23,7 +23,7 @@ let paintMode = 'draw';
 let isPainting = false;
 let microbit = null;
 
-const BRIGHTNESS = 0.3; // 0.0 → 1.0
+const BRIGHTNESS = 0.4; // 0.0 → 1.0
 
 const toRgbTuple = (hex) => {
   const normalized = hex.replace('#', '');
@@ -33,8 +33,24 @@ const toRgbTuple = (hex) => {
   return [r, g, b];
 };
 
+// The matrix is physically wired 90° out from the editor layout, so rotate the
+// grid 90° clockwise before flattening to the NeoPixel strip order. Swap to the
+// counter-clockwise mapping (commented below) if the display ends up mirrored.
+const rotate90 = (arr) => {
+  const out = new Array(arr.length);
+  for (let row = 0; row < GRID_HEIGHT; row += 1) {
+    for (let col = 0; col < GRID_WIDTH; col += 1) {
+      // clockwise: destination (row, col) <- source (GRID_HEIGHT-1-col, row)
+      out[row * GRID_WIDTH + col] = arr[(GRID_HEIGHT - 1 - col) * GRID_WIDTH + row];
+      // counter-clockwise alternative:
+      // out[row * GRID_WIDTH + col] = arr[col * GRID_WIDTH + (GRID_WIDTH - 1 - row)];
+    }
+  }
+  return out;
+};
+
 const toPython = () => {
-  const tuples = colors.map((hex) => `(${toRgbTuple(hex).join(',')})`).join(', ');
+  const tuples = rotate90(colors).map((hex) => `(${toRgbTuple(hex).join(',')})`).join(', ');
   return [
     'from microbit import *',
     'import neopixel',
