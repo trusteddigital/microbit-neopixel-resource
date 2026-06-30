@@ -102,3 +102,29 @@ pre {
     grid-template-columns: 1fr;
   }
 }
+
+.preset-group {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.preset-btn {
+  padding: 0.4rem 0.5rem;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.toolbar-divider {
+  color: #475569;
+  font-size: 0.85rem;
+  padding: 0 0.25rem;
+  user-select: none;
+}
+.connect-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.connect-group button {
+  flex: 1;
+}
