@@ -127,8 +127,8 @@ colorInput.addEventListener('change', () => addRecentColor(colorInput.value));
 colorInput.addEventListener('input', renderRecentColors);
 
 // ── Image import ──────────────────────────────────────────────
-const imageFileInput = document.querySelector('#image-file-input');
-const importImageBtn = document.querySelector('#import-image');
+//const imageFileInput = document.querySelector('#image-file-input');
+//const importImageBtn = document.querySelector('#import-image');
 
 const PRESETS = {
   christmas: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8">
@@ -280,8 +280,8 @@ const loadImageToGrid = (file) => {
   img.src = url;
 };
 
-importImageBtn.addEventListener('click', () => imageFileInput.click());
-imageFileInput.addEventListener('change', (e) => loadImageToGrid(e.target.files?.[0]));
+//importImageBtn.addEventListener('click', () => imageFileInput.click());
+//imageFileInput.addEventListener('change', (e) => loadImageToGrid(e.target.files?.[0]));
 
 // Preset buttons
 Object.entries(PRESETS).forEach(([name, svg]) => {
