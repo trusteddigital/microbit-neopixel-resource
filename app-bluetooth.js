@@ -1,5 +1,6 @@
 import { createWebUSBConnection, createUniversalHexFlashDataSource } from 'https://esm.sh/@microbit/microbit-connection@0.1.0';
 import { MicropythonFsHex } from 'https://esm.sh/@microbit/microbit-fs@0.10.0';
+import { microbitBoardId } from 'https://esm.sh/@microbit/microbit-fs@0.10.0';
 
 const GRID_WIDTH = 8;
 const GRID_HEIGHT = 8;
@@ -10,7 +11,6 @@ const colorInput = document.querySelector('#paint-color');
 const recentColorsEl = document.querySelector('#recent-colors');
 const fillGridBtn = document.querySelector('#fill-grid');
 const clearGridBtn = document.querySelector('#clear-grid');
-const resetProjectBtn = document.querySelector('#reset-project');
 const connectUsbButton = document.querySelector('#connect-usb');
 const pushButton = document.querySelector('#push-button');
 const statusEl = document.querySelector('#status');
@@ -34,80 +34,6 @@ let strokeErases = false; // true while a right-click stroke is active
 let dragIndex = null; // frame index being dragged
 let microbit = null;
 let serialAttached = false;
-
-const STORAGE_KEY = 'microbit-neopixel-designer';
-let saveTimer = null;
-
-const snapshotState = () => ({
-  frames,
-  currentFrameIndex,
-  paintColor: colorInput.value,
-  recentColors,
-});
-
-const saveStateNow = () => {
-  clearTimeout(saveTimer);
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshotState()));
-  } catch (error) {
-    console.warn('[micro:bit] could not save state', error);
-  }
-};
-
-const saveState = () => {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveStateNow, 300);
-};
-
-const isValidFrame = (frame) => (
-  Array.isArray(frame)
-  && frame.length === PIXEL_COUNT
-  && frame.every((c) => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c))
-);
-
-const loadState = () => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return false;
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data.frames) || data.frames.length === 0) return false;
-    if (!data.frames.every(isValidFrame)) return false;
-
-    frames = data.frames;
-    currentFrameIndex = Math.min(
-      Math.max(0, data.currentFrameIndex ?? 0),
-      frames.length - 1,
-    );
-    if (typeof data.paintColor === 'string') colorInput.value = data.paintColor;
-    if (Array.isArray(data.recentColors)) {
-      recentColors = data.recentColors
-        .filter((c) => typeof c === 'string')
-        .slice(0, RECENT_LIMIT);
-    }
-    colors = frames[currentFrameIndex].slice();
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const resetProject = () => {
-  if (!window.confirm('Clear your animation and start again?')) return;
-  clearTimeout(saveTimer);
-  localStorage.removeItem(STORAGE_KEY);
-  frames = [blankFrame()];
-  currentFrameIndex = 0;
-  colors = blankFrame();
-  recentColors = [];
-  colorInput.value = '#FFFFFF';
-  addRecentColor(colorInput.value);
-  loadFrame(0);
-};
-
-window.addEventListener('beforeunload', () => {
-  frames[currentFrameIndex] = colors.slice();
-  saveStateNow();
-});
 
 const BRIGHTNESS = 0.4; // 0.0 → 1.0
 
@@ -181,36 +107,15 @@ const toPython = () => {
     'idx = 0',
     'show(idx)',
     '',
-    '# Tap A/B for one frame; hold 0.5s then play at 10 fps',
+    '# A steps forward, B steps backward (wraps around)',
     'while True:',
     '    if button_a.was_pressed():',
-    '        start = running_time()',
-    '        while button_a.is_pressed():',
-    '            if running_time() - start >= 500:',
-    '                while button_a.is_pressed():',
-    '                    idx = (idx + 1) % n',
-    '                    show(idx)',
-    '                    sleep(100)',
-    '                break',
-    '            sleep(20)',
-    '        else:',
-    '            idx = (idx + 1) % n',
-    '            show(idx)',
-    '    elif button_b.was_pressed():',
-    '        start = running_time()',
-    '        while button_b.is_pressed():',
-    '            if running_time() - start >= 500:',
-    '                while button_b.is_pressed():',
-    '                    idx = (idx - 1) % n',
-    '                    show(idx)',
-    '                    sleep(100)',
-    '                break',
-    '            sleep(20)',
-    '        else:',
-    '            idx = (idx - 1) % n',
-    '            show(idx)',
-    '    else:',
-    '        sleep(20)',
+    '        idx = (idx + 1) % n',
+    '        show(idx)',
+    '    if button_b.was_pressed():',
+    '        idx = (idx - 1) % n',
+    '        show(idx)',
+    '    sleep(20)',
   ].join('\n');
 };
 
@@ -248,14 +153,14 @@ const attachSerial = () => {
   // device (e.g. after unplugging or swapping micro:bits). Reboot is USB-only.
   microbit.addEventListener('status', () => {
     const live = isConnected();
-    serialRebootBtn.disabled = !live;
+    serialRebootBtn.disabled = !live || connectionType !== 'usb';
     if (!live) {
       pushButton.disabled = true;
       appendSerial('\n[micro:bit disconnected]\n');
     }
   });
   serialAttached = true;
-  serialRebootBtn.disabled = false;
+  serialRebootBtn.disabled = connectionType !== 'usb';
   appendSerial('[serial connected — waiting for output]\n');
 };
 
@@ -278,6 +183,97 @@ serialRebootBtn.addEventListener('click', async () => {
   }
 });
 
+// ── Bluetooth UART transfer ───────────────────────────────────
+// Over BLE we don't flash a program; the micro:bit already runs a MakeCode
+// "player" (see microbit-player/). We stream frames to it over the UART
+// service using a small line-based protocol with per-frame acknowledgements.
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+let uartLineBuffer = '';
+let uartWaiters = []; // { predicate, resolve }
+
+const toHexByte = (n) => n.toString(16).padStart(2, '0');
+const frameToHex = (frame) =>
+  rotate90(frame).map((hex) => toRgbTuple(hex).map(toHexByte).join('')).join('');
+
+const handleUartLine = (line) => {
+  appendSerial(`< ${line}\n`);
+  uartWaiters = uartWaiters.filter((w) => {
+    if (w.predicate(line)) {
+      w.resolve(line);
+      return false;
+    }
+    return true;
+  });
+};
+
+const onUartData = (event) => {
+  uartLineBuffer += textDecoder.decode(event.value);
+  let nl;
+  while ((nl = uartLineBuffer.indexOf('\n')) >= 0) {
+    const line = uartLineBuffer.slice(0, nl).replace(/\r$/, '');
+    uartLineBuffer = uartLineBuffer.slice(nl + 1);
+    if (line.length) handleUartLine(line);
+  }
+};
+
+const attachUart = () => {
+  if (uartAttached || !microbit || typeof microbit.addEventListener !== 'function') return;
+  microbit.addEventListener('uartdata', onUartData);
+  if (typeof microbit.startNotifications === 'function') {
+    try { microbit.startNotifications('uartdata'); } catch (e) { /* auto-started */ }
+  }
+  uartAttached = true;
+};
+
+const waitForLine = (predicate, timeoutMs) =>
+  new Promise((resolve, reject) => {
+    const waiter = { predicate, resolve };
+    uartWaiters.push(waiter);
+    setTimeout(() => {
+      uartWaiters = uartWaiters.filter((w) => w !== waiter);
+      reject(new Error('timed out waiting for micro:bit'));
+    }, timeoutMs);
+  });
+
+// BLE characteristic writes are small; chunk to stay within the UART MTU.
+const uartSend = async (str) => {
+  const bytes = textEncoder.encode(str);
+  const CHUNK = 20;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    await microbit.uartWrite(bytes.slice(i, i + CHUNK));
+  }
+};
+
+const sendFramesOverBluetooth = async () => {
+  if (!isConnected()) throw new Error('not connected');
+  if (typeof microbit.uartWrite !== 'function') {
+    throw new Error('this connection has no UART (is the BLE player flashed?)');
+  }
+  attachUart();
+
+  setStatus('Bluetooth: starting transfer…');
+  await uartSend('R\n'); // reset upload buffer on the player
+  await waitForLine((l) => l === 'R', 4000).catch(() => {
+    // Player may not echo ready; continue and rely on per-frame acks.
+  });
+
+  for (let i = 0; i < frames.length; i += 1) {
+    const hex = frameToHex(frames[i]); // 384 hex chars per frame
+    // Send in small data lines, then a "push frame" marker the player acks.
+    for (let p = 0; p < hex.length; p += 32) {
+      await uartSend(`D${hex.slice(p, p + 32)}\n`);
+    }
+    await uartSend('P\n');
+    await waitForLine((l) => l.startsWith('A'), 8000);
+    setStatus(`Bluetooth: sent frame ${i + 1}/${frames.length}…`);
+  }
+
+  await uartSend('S\n'); // save to flash and start playing
+  await waitForLine((l) => l === 'K', 10000);
+  setStatus('Bluetooth: animation saved on micro:bit.');
+};
+
 const render = () => {
   [...gridEl.children].forEach((cell, i) => {
     cell.style.backgroundColor = colors[i];
@@ -297,19 +293,13 @@ const commit = () => {
   frames[currentFrameIndex] = colors.slice();
   paintThumb(framesListEl.querySelector(`.frame-thumb[data-index="${currentFrameIndex}"] canvas`), colors);
   pythonPreviewEl.textContent = toPython();
-  saveState();
 };
 
 const loadFrame = (index) => {
-  const next = Math.max(0, Math.min(index, frames.length - 1));
-  if (next !== currentFrameIndex) {
-    frames[currentFrameIndex] = colors.slice();
-  }
-  currentFrameIndex = next;
+  currentFrameIndex = Math.max(0, Math.min(index, frames.length - 1));
   colors = frames[currentFrameIndex].slice();
   render();
   renderStrip();
-  saveStateNow();
 };
 
 const addFrame = (frame) => {
@@ -400,7 +390,6 @@ const renderStrip = () => {
       currentFrameIndex = newSelected;
       dragIndex = null;
       renderStrip();
-      saveStateNow();
     });
 
     framesListEl.append(tile);
@@ -431,7 +420,6 @@ const addRecentColor = (hex) => {
   const value = hex.toLowerCase();
   recentColors = [value, ...recentColors.filter((c) => c !== value)].slice(0, RECENT_LIMIT);
   renderRecentColors();
-  saveState();
 };
 
 const renderRecentColors = () => {
@@ -458,12 +446,172 @@ const renderRecentColors = () => {
   }
 };
 
-colorInput.addEventListener('change', () => {
-  addRecentColor(colorInput.value);
-});
-colorInput.addEventListener('input', () => {
-  renderRecentColors();
-  saveState();
+colorInput.addEventListener('change', () => addRecentColor(colorInput.value));
+colorInput.addEventListener('input', renderRecentColors);
+
+// ── Image import ──────────────────────────────────────────────
+//const imageFileInput = document.querySelector('#image-file-input');
+//const importImageBtn = document.querySelector('#import-image');
+
+const PRESETS = {
+  christmas: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8">
+    <rect width="8" height="8" fill="#0a0a2a"/>
+    <polygon points="4,0 1,3 2,3 0.5,5.5 2,5.5 1,7 7,7 6,5.5 7.5,5.5 6,3 7,3" fill="#2d8c2d"/>
+    <rect x="3" y="7" width="2" height="1" fill="#8B4513"/>
+    <circle cx="4" cy="0.5" r="0.4" fill="#FFD700"/>
+    <circle cx="2.5" cy="3.5" r="0.35" fill="#ff0000"/>
+    <circle cx="5.5" cy="4" r="0.35" fill="#FFD700"/>
+    <circle cx="3" cy="5.5" r="0.35" fill="#ff4444"/>
+    <circle cx="5" cy="6" r="0.35" fill="#00aaff"/>
+  </svg>`,
+
+  rainbow: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8">
+    <rect width="8" height="8" fill="#87CEEB"/>
+    <path d="M0,8 Q4,-2 8,8" fill="none" stroke="#FF0000" stroke-width="1"/>
+    <path d="M0.5,8 Q4,-1.2 7.5,8" fill="none" stroke="#FF7F00" stroke-width="0.8"/>
+    <path d="M1,8 Q4,-0.5 7,8" fill="none" stroke="#FFFF00" stroke-width="0.8"/>
+    <path d="M1.5,8 Q4,0.2 6.5,8" fill="none" stroke="#00CC00" stroke-width="0.8"/>
+    <path d="M2,8 Q4,1 6,8" fill="none" stroke="#0000FF" stroke-width="0.8"/>
+    <path d="M2.5,8 Q4,1.8 5.5,8" fill="none" stroke="#8B00FF" stroke-width="0.8"/>
+    <ellipse cx="1.5" cy="7" rx="1.5" ry="1" fill="white"/>
+    <ellipse cx="6.5" cy="7" rx="1.5" ry="1" fill="white"/>
+  </svg>`,
+
+  pacman: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8">
+    <rect width="8" height="8" fill="#000000"/>
+    <path d="M1,4 L3.5,2 A2.5,2.5 0 1,1 3.5,6 Z" fill="#FFD700"/>
+    <circle cx="2.5" cy="2.2" r="0.35" fill="#000"/>
+    <circle cx="5" cy="4" r="0.4" fill="#FFB8FF"/>
+    <circle cx="6.5" cy="4" r="0.4" fill="#FFB8FF"/>
+    <circle cx="5.75" cy="2.5" r="0.4" fill="#FFB8FF"/>
+    <rect x="0" y="1" width="0.8" height="0.8" fill="#2121DE"/>
+    <rect x="0" y="6.2" width="0.8" height="0.8" fill="#2121DE"/>
+    <rect x="7" y="0" width="0.8" height="1.5" fill="#2121DE"/>
+    <rect x="7" y="6.5" width="0.8" height="1.5" fill="#2121DE"/>
+  </svg>`,
+
+  mario: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8">
+    <rect width="8" height="8" fill="#5C94FC"/>
+    <rect x="2" y="1" width="4" height="1" fill="#AC3232"/>
+    <rect x="1" y="2" width="6" height="1" fill="#AC3232"/>
+    <rect x="1" y="3" width="2" height="1" fill="#F5C27B"/>
+    <rect x="3" y="3" width="1" height="1" fill="#000"/>
+    <rect x="4" y="3" width="2" height="1" fill="#F5C27B"/>
+    <rect x="1" y="4" width="6" height="1" fill="#AC3232"/>
+    <rect x="2" y="5" width="1" height="1" fill="#F5C27B"/>
+    <rect x="3" y="5" width="2" height="1" fill="#AC3232"/>
+    <rect x="5" y="5" width="1" height="1" fill="#F5C27B"/>
+    <rect x="2" y="6" width="1" height="2" fill="#5C3317"/>
+    <rect x="5" y="6" width="1" height="2" fill="#5C3317"/>
+  </svg>`,
+
+  pattern: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8">
+    <rect width="8" height="8" fill="#0d0d2b"/>
+    <rect x="0" y="0" width="2" height="2" fill="#ff006e"/>
+    <rect x="2" y="0" width="2" height="2" fill="#8338ec"/>
+    <rect x="4" y="0" width="2" height="2" fill="#3a86ff"/>
+    <rect x="6" y="0" width="2" height="2" fill="#06d6a0"/>
+    <rect x="1" y="2" width="2" height="2" fill="#fb5607"/>
+    <rect x="3" y="2" width="2" height="2" fill="#ffbe0b"/>
+    <rect x="5" y="2" width="2" height="2" fill="#ff006e"/>
+    <rect x="0" y="4" width="2" height="2" fill="#3a86ff"/>
+    <rect x="2" y="4" width="2" height="2" fill="#06d6a0"/>
+    <rect x="4" y="4" width="2" height="2" fill="#8338ec"/>
+    <rect x="6" y="4" width="2" height="2" fill="#fb5607"/>
+    <rect x="1" y="6" width="2" height="2" fill="#ffbe0b"/>
+    <rect x="3" y="6" width="2" height="2" fill="#ff006e"/>
+    <rect x="5" y="6" width="2" height="2" fill="#3a86ff"/>
+  </svg>`,
+};
+
+const svgToGrid = (svgString) => {
+  const blob = new Blob([svgString], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = GRID_WIDTH;
+    canvas.height = GRID_HEIGHT;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, GRID_WIDTH, GRID_HEIGHT);
+
+    const imageData = ctx.getImageData(0, 0, GRID_WIDTH, GRID_HEIGHT);
+    const d = imageData.data;
+
+    let min = 255, max = 0;
+    for (let i = 0; i < PIXEL_COUNT; i++) {
+      min = Math.min(min, d[i*4], d[i*4+1], d[i*4+2]);
+      max = Math.max(max, d[i*4], d[i*4+1], d[i*4+2]);
+    }
+    const range = max - min || 1;
+    const stretch = (v) => Math.round((v - min) / range * 255);
+
+    for (let i = 0; i < PIXEL_COUNT; i++) {
+      const r = stretch(d[i*4]);
+      const g = stretch(d[i*4+1]);
+      const b = stretch(d[i*4+2]);
+      colors[i] = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    }
+
+    URL.revokeObjectURL(url);
+    render();
+    commit();
+  };
+
+  img.src = url;
+};
+
+const loadImageToGrid = (file) => {
+  if (!file || !file.type.startsWith('image/')) return;
+
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+
+  img.onload = () => {
+    const size = Math.min(img.width, img.height);
+    const sx = (img.width - size) / 2;
+    const sy = (img.height - size) / 2;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = GRID_WIDTH;
+    canvas.height = GRID_HEIGHT;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, sx, sy, size, size, 0, 0, GRID_WIDTH, GRID_HEIGHT);
+
+    const imageData = ctx.getImageData(0, 0, GRID_WIDTH, GRID_HEIGHT);
+    const d = imageData.data;
+
+    let min = 255, max = 0;
+    for (let i = 0; i < PIXEL_COUNT; i++) {
+      min = Math.min(min, d[i*4], d[i*4+1], d[i*4+2]);
+      max = Math.max(max, d[i*4], d[i*4+1], d[i*4+2]);
+    }
+    const range = max - min || 1;
+    const stretch = (v) => Math.round((v - min) / range * 255);
+
+    for (let i = 0; i < PIXEL_COUNT; i++) {
+      const r = stretch(d[i*4]);
+      const g = stretch(d[i*4+1]);
+      const b = stretch(d[i*4+2]);
+      colors[i] = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    }
+
+    URL.revokeObjectURL(url);
+    render();
+    commit();
+  };
+
+  img.src = url;
+};
+
+//importImageBtn.addEventListener('click', () => imageFileInput.click());
+//imageFileInput.addEventListener('change', (e) => loadImageToGrid(e.target.files?.[0]));
+
+// Preset buttons
+Object.entries(PRESETS).forEach(([name, svg]) => {
+  const btn = document.querySelector(`#preset-${name}`);
+  if (btn) btn.addEventListener('click', () => svgToGrid(svg));
 });
 
 const createGrid = () => {
@@ -495,36 +643,70 @@ const createGrid = () => {
   });
 };
 
-const connectMicrobit = async () => {
-  microbit = createWebUSBConnection();
+const createMicrobitAdapter = () => {
+  // Use the ESM import from esm.sh: createWebUSBConnection
+  if (typeof createWebUSBConnection === 'function') {
+    return createWebUSBConnection();
+  }
+  return null;
+};
+
+const connectMicrobit = async (type) => {
+  microbit = type === 'bluetooth'
+    ? createWebBluetoothConnection()
+    : createWebUSBConnection();
+  // Fresh connection object — let attach*() wire up listeners again.
+  connectionType = type;
   serialAttached = false;
+  uartAttached = false;
+  uartLineBuffer = '';
 
   if (!microbit) {
-    debug('Error: USB SDK not available');
+    debug(`Error: ${type} SDK not available`);
     return null;
   }
 
-  debug('Connecting via USB...');
+  debug(`Connecting via ${type}...`);
   await microbit.connect();
   const boardVersion = microbit.getBoardVersion?.() ?? 'unknown';
-  debug(`Connected via USB to micro:bit ${boardVersion}`);
+  debug(`Connected via ${type} to micro:bit ${boardVersion}`);
   return microbit;
 };
 
 connectUsbButton.addEventListener('click', async () => {
   try {
     setStatus('Connecting via USB… approve the browser device prompt.');
-    const adapter = await connectMicrobit();
+    const adapter = await connectMicrobit('usb');
     if (!adapter) {
       setStatus('Failed to load USB library.');
       return;
     }
     pushButton.disabled = false;
+    pushButton.textContent = 'Download animation';
     attachSerial();
     setStatus('Connected via USB.');
   } catch (error) {
     debug(`USB connection error: ${error.message}`);
     setStatus(`USB connection failed (${error.message})`);
+  }
+});
+
+connectBluetoothButton.addEventListener('click', async () => {
+  try {
+    setStatus('Connecting via Bluetooth… approve the browser device prompt.');
+    const adapter = await connectMicrobit('bluetooth');
+    if (!adapter) {
+      setStatus('Failed to load Bluetooth library.');
+      return;
+    }
+    pushButton.disabled = false;
+    pushButton.textContent = 'Send over Bluetooth';
+    attachSerial();
+    attachUart();
+    setStatus('Connected via Bluetooth.');
+  } catch (error) {
+    debug(`Bluetooth connection error: ${error.message}`);
+    setStatus(`Bluetooth connection failed (${error.message})`);
   }
 });
 
@@ -613,12 +795,16 @@ pushButton.addEventListener('click', async () => {
   pushButton.disabled = true;
   try {
     debug('Push button clicked');
-    setStatus('uploading script to micro:bit…');
-    await pushScript();
-    setStatus('upload complete.');
+    if (connectionType === 'bluetooth') {
+      await sendFramesOverBluetooth();
+    } else {
+      setStatus('uploading script to micro:bit…');
+      await pushScript();
+      setStatus('upload complete.');
+    }
   } catch (error) {
     debug(`Push error: ${error.message}`);
-    setStatus(`upload failed (${error.message})`);
+    setStatus(`${connectionType === 'bluetooth' ? 'Bluetooth send' : 'upload'} failed (${error.message})`);
   } finally {
     if (isConnected()) pushButton.disabled = false;
   }
@@ -638,14 +824,6 @@ clearGridBtn.addEventListener('click', () => {
 
 addFrameBtn.addEventListener('click', () => addFrame(colors.slice()));
 
-resetProjectBtn.addEventListener('click', resetProject);
-
 createGrid();
-if (loadState()) {
-  renderRecentColors();
-  render();
-  renderStrip();
-} else {
-  addRecentColor(colorInput.value);
-  loadFrame(0);
-}
+addRecentColor(colorInput.value);
+loadFrame(0);

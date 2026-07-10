@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>STEM Horizons - micro:bit Pixel Designer</title>
+    <title>micro:bit NeoPixel Designer (Bluetooth)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -11,7 +11,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
-    <script type="module" src="app.js"></script>
+    <script type="module" src="app-bluetooth.js"></script>
   </head>
   <body>
     <main>
@@ -39,7 +39,7 @@
 
         <aside class="controls">
           <img src="stem-horizons.svg" alt="STEM Horizons" class="site-logo" />
-      
+
           <div class="tool-block">
             <span class="tool-label">Colour</span>
             <div class="color-row">
@@ -53,14 +53,16 @@
               <button id="fill-grid" type="button">Fill</button>
               <button id="clear-grid" type="button">Clear</button>
             </div>
-            <button id="reset-project" type="button" class="reset-btn">Start again</button>
           </div>
 
           <p class="paint-hint">Left-click to paint · Right-click to erase</p>
 
           <hr class="controls-divider" />
 
-          <button id="connect-usb" type="button">Connect USB</button>
+          <div class="connect-group">
+            <button id="connect-usb" type="button">Connect USB</button>
+            <button id="connect-bluetooth" type="button">Connect Bluetooth</button>
+          </div>
           <button id="push-button" class="push-btn" type="button" disabled>Update micro:bit</button>
           <p id="status" aria-live="polite">Status: waiting for connection.</p>
 
@@ -85,7 +87,7 @@
           <span class="tool-label">Animation</span>
           <button id="add-frame" type="button">+ Add frame</button>
           <span id="frame-count" class="frame-count">1 frame</span>
-          <span class="film-strip__hint">Tap A/B to step · hold to play at 10 fps</span>
+          <span class="film-strip__hint">A = next · B = previous on the micro:bit</span>
         </div>
         <div id="frames-list" class="frames-list"></div>
       </section>

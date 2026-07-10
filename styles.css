@@ -96,6 +96,18 @@ main {
   gap: 0.6rem;
 }
 
+.reset-btn {
+  width: 100%;
+  margin-top: 0.5rem;
+  font-size: 0.72rem;
+  color: #8ea0c6;
+  border-color: #3a4d80;
+}
+
+.reset-btn:hover {
+  color: var(--rgs-cream);
+}
+
 .paint-hint {
   margin: 0;
   font-size: 0.75rem;
@@ -447,6 +459,158 @@ input[type='color'] {
   border-top: 1px solid #2c3f72;
 }
 
+/* ── Serial monitor ─────────────────────────────────────────── */
+.serial-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-top: 1px solid #2c3f72;
+}
+
+.serial-actions button {
+  font-size: 0.7rem;
+  padding: 0.4rem 0.6rem;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+#serial-log {
+  color: #f0b24a;
+  min-height: 80px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Film strip (animation frames) ──────────────────────────── */
+.film-strip {
+  margin-top: 1.5rem;
+  padding: 1rem 1.25rem 1.25rem;
+  background: linear-gradient(180deg, rgba(20, 34, 78, 0.85), rgba(11, 20, 48, 0.85));
+  border: 1px solid #2c3f72;
+  border-bottom: 4px solid var(--rgs-claret);
+}
+
+.film-strip__header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.frame-count {
+  font-size: 0.8rem;
+  color: var(--rgs-gold);
+  font-weight: 700;
+}
+
+.frame-count.warn {
+  color: var(--rgs-claret-bright);
+}
+
+.film-strip__hint {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: #8ea0c6;
+  letter-spacing: 0.04em;
+}
+
+.frames-list {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  align-items: stretch;
+}
+
+.frame-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  background: #050608;
+  border: 2px solid #2c3f72;
+  cursor: pointer;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+.frame-thumb canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+}
+
+.frame-thumb.selected {
+  border-color: var(--rgs-gold-bright);
+  box-shadow: 0 0 0 1px var(--rgs-gold-bright), 0 0 10px rgba(230, 194, 90, 0.5);
+}
+
+.frame-thumb.dragging {
+  opacity: 0.4;
+}
+
+.frame-thumb.drag-over {
+  border-style: dashed;
+  border-color: var(--rgs-gold-bright);
+}
+
+.frame-thumb__num {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  padding: 0 4px;
+  font-family: var(--font-pixel);
+  font-size: 0.55rem;
+  line-height: 1.4;
+  color: var(--rgs-cream);
+  background: rgba(11, 20, 48, 0.85);
+  pointer-events: none;
+}
+
+.frame-thumb__del {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: 0.85rem;
+  line-height: 1;
+  color: var(--rgs-cream);
+  background: var(--rgs-claret);
+  border: 1px solid var(--rgs-gold);
+  box-shadow: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.frame-thumb:hover .frame-thumb__del {
+  opacity: 1;
+}
+
+.frame-thumb__del:hover {
+  background: var(--rgs-claret-bright);
+  transform: none;
+}
+
+.frame-thumb--add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  color: var(--rgs-gold);
+  background: rgba(0, 0, 0, 0.25);
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.frame-thumb--add:hover {
+  background: var(--rgs-navy);
+  border-color: var(--rgs-gold-bright);
+  transform: none;
+}
+
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 880px) {
   .workspace {
@@ -455,5 +619,9 @@ input[type='color'] {
 
   .paint-hint {
     margin-left: 0;
+  }
+
+  .film-strip__hint {
+    display: none;
   }
 }
