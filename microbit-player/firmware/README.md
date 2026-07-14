@@ -11,9 +11,11 @@ CODAL C++ program for **micro:bit V2** that does both:
 
 ### Option A — GitHub Actions (recommended)
 
-Push changes under `microbit-player/firmware/` (or run the workflow manually).
-Download the `neopixel-bluetooth-player` artifact → save as
-`vendor/neopixel-bluetooth-player.hex`.
+Push changes under `microbit-player/firmware/` (or run **Build NeoPixel BLE player**
+manually via Actions → Run workflow).
+
+On success the workflow **commits** `vendor/neopixel-bluetooth-player.hex` to the
+repo (and also uploads it as a downloadable artifact).
 
 ### Option B — Local (Linux / WSL / macOS)
 
