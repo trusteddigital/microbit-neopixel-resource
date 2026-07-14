@@ -72,7 +72,13 @@ static uint8_t hexByteAt(const char *hex, int byteIndex) {
 static void showFrame(int k) {
   if (frameCount <= 0 || k < 0 || k >= frameCount) return;
   const uint8_t *src = &frameData[k * FRAME_BYTES];
-  memcpy(showBuf, src, FRAME_BYTES);
+  // Stored as RGB (same as USB MicroPython frames.bin). WS2812 wire order
+  // is GRB — MicroPython converts; neopixel_send_buffer does not.
+  for (int i = 0; i < FRAME_BYTES; i += 3) {
+    showBuf[i] = src[i + 1];     // G
+    showBuf[i + 1] = src[i];     // R
+    showBuf[i + 2] = src[i + 2]; // B
+  }
   // PWM NeoPixel driver — does not disable IRQs, so BLE stays alive.
   neopixel_send_buffer(uBit.io.P16, showBuf, FRAME_BYTES);
 }
