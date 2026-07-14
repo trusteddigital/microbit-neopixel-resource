@@ -7,6 +7,9 @@ on:
       - '.github/workflows/build-bluetooth-player.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -57,3 +60,15 @@ jobs:
         with:
           name: neopixel-bluetooth-player
           path: vendor/neopixel-bluetooth-player.hex
+
+      - name: Commit hex to vendor/
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add vendor/neopixel-bluetooth-player.hex
+          if git diff --staged --quiet; then
+            echo "Hex unchanged — nothing to commit."
+          else
+            git commit -m "Add built BLE player hex to vendor/"
+            git push
+          fi
