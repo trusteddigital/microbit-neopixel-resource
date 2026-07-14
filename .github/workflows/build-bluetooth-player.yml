@@ -1,0 +1,59 @@
+name: Build NeoPixel BLE player
+
+on:
+  push:
+    paths:
+      - 'microbit-player/firmware/**'
+      - '.github/workflows/build-bluetooth-player.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Checkout microbit-v2-samples
+        uses: actions/checkout@v4
+        with:
+          repository: lancaster-university/microbit-v2-samples
+          path: build-samples
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup arm-none-eabi-gcc
+        uses: carlosperate/arm-none-eabi-gcc-action@v1
+        with:
+          release: 'latest'
+
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v2
+
+      - name: Install Ninja
+        run: python -m pip install ninja
+
+      - name: Overlay player sources
+        run: |
+          cp microbit-player/firmware/codal.json build-samples/codal.json
+          rm -rf build-samples/source/*
+          cp microbit-player/firmware/source/main.cpp build-samples/source/main.cpp
+
+      - name: Build
+        working-directory: build-samples
+        run: python build.py
+
+      - name: Copy hex into vendor/
+        run: |
+          mkdir -p vendor
+          cp build-samples/MICROBIT.hex vendor/neopixel-bluetooth-player.hex
+          ls -la vendor/neopixel-bluetooth-player.hex
+
+      - name: Upload hex artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neopixel-bluetooth-player
+          path: vendor/neopixel-bluetooth-player.hex

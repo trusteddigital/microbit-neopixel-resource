@@ -1,69 +1,36 @@
 # micro:bit Bluetooth player
 
-Bluetooth cannot flash MicroPython. This **MakeCode player** runs on the micro:bit
-instead. Flash it **once** via MakeCode; then use the web designer’s **Send over
-Bluetooth** to upload animations.
+MakeCode **cannot** combine NeoPixel + Bluetooth (they are mutually exclusive).
+This project ships **custom CODAL firmware** instead.
 
-**micro:bit V2 only.**
+## What to flash
 
-## Setup (do this order exactly)
+| File | Role |
+|------|------|
+| [`firmware/`](firmware/) | C++ source (PWM NeoPixels + BLE UART + flash save) |
+| `vendor/neopixel-bluetooth-player.hex` | Built hex (from GitHub Actions or local build) |
 
-### 1. New MakeCode project
+**micro:bit V2 only.** NeoPixel data → **P16**.
 
-Open [makecode.microbit.org](https://makecode.microbit.org).
+## One-time setup
 
-Check the board picker (bottom-right) says **V2**, not V1.
+1. Build the hex (see [`firmware/README.md`](firmware/README.md)) or download the CI artifact.
+2. Copy `vendor/neopixel-bluetooth-player.hex` onto the micro:bit (USB drag-and-drop).
+3. Boot shows **H** (no animation yet) or **P** (saved animation restored).
 
-### 2. Add extensions **before** pasting code
+## Classroom workflow
 
-| Step | Action |
-|------|--------|
-| a | **Extensions** → search **`neopixel`** → add **neopixel** (Microsoft) |
-| b | **Extensions** → search **`bluetooth`** → add **Bluetooth** |
+1. Open `bluetooth.html` in Chrome/Edge.
+2. **Connect Bluetooth** → select the micro:bit (display shows **C**).
+3. Design → **Send over Bluetooth**.
+4. Unplug / battery / plug back in → last animation reloads automatically.
+5. Tap **A/B** to step; hold ~0.5s to play at 10 fps.
 
-You should see **NeoPixel** and **Bluetooth** drawers in the toolbox.  
-If you paste the code first, MakeCode shows *“Cannot find name neopixel”* — that’s normal until the extensions are added.
+## Why not MakeCode?
 
-### 3. Bluetooth project settings
+MakeCode removes the NeoPixel / ws2812b extension when you add Bluetooth (and vice versa). Official MicroPython on V2 only exposes BLE for flashing, not app UART. This CODAL build uses the V2 **PWM NeoPixel** driver, which coexists with the SoftDevice.
 
-Gear icon → **Project Settings**:
-
-- Turn **Bluetooth** on
-- Enable **No Pairing Required: Anyone can connect via Bluetooth**
-
-### 4. Paste the player code
-
-1. Open the **JavaScript** view (not Blocks).
-2. Select all default code and delete it.
-3. Paste the full contents of [`main.ts`](main.ts).
-4. Errors should clear once both extensions are installed.
-
-### 5. Download once
-
-Connect the micro:bit V2 by USB → **Download**.
-
-NeoPixel data wire → **P16** (must match the web designer).
-
-On first boot with no animation saved, the micro:bit shows a **heart** icon.
-
-## Send animations from the web designer
-
-1. **Connect Bluetooth** → pick your micro:bit (tick icon on the display).
-2. **Send over Bluetooth** → wait for per-frame progress.
-3. **A** = next frame, **B** = previous frame (wraps around).
-
-Animations are saved in flash and survive power-off.
-
-## Troubleshooting
-
-| Error | Fix |
-|-------|-----|
-| `Cannot find name 'neopixel'` | Add the **neopixel** extension (step 2a) |
-| `Cannot find name 'bluetooth'` | Add the **Bluetooth** extension (step 2b) |
-| `Cannot find name 'settings'` | Use a **V2** project; update MakeCode if needed |
-| `Parameter implicitly has an 'any' type` | Use the latest [`main.ts`](main.ts) (types are included) |
-
-## Protocol (reference)
+## Protocol
 
 | Line from web | Meaning |
 |---------------|---------|
