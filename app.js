@@ -278,11 +278,15 @@ serialRebootBtn.addEventListener('click', async () => {
   }
 });
 
+const paintCell = (idx) => {
+  const cell = gridEl.children[idx];
+  if (!cell) return;
+  cell.style.backgroundColor = colors[idx];
+  cell.classList.toggle('lit', colors[idx] !== '#000000');
+};
+
 const render = () => {
-  [...gridEl.children].forEach((cell, i) => {
-    cell.style.backgroundColor = colors[i];
-    cell.classList.toggle('lit', colors[i] !== '#000000');
-  });
+  for (let i = 0; i < PIXEL_COUNT; i += 1) paintCell(i);
   pythonPreviewEl.textContent = toPython();
 };
 
@@ -477,21 +481,23 @@ const createGrid = () => {
       strokeErases = event.button === 2; // right-click erases
       isPainting = true;
       applyColor(i);
-      render();
-      commit();
+      paintCell(i);
     });
     btn.addEventListener('mouseenter', () => {
       if (!isPainting) return;
       applyColor(i);
-      render();
-      commit();
+      paintCell(i);
     });
     gridEl.append(btn);
   }
 
   gridEl.addEventListener('contextmenu', (event) => event.preventDefault());
+  // Defer thumbnail / Python / localStorage work until the stroke ends so
+  // drag-painting cannot saturate the main thread.
   document.addEventListener('mouseup', () => {
+    if (!isPainting) return;
     isPainting = false;
+    commit();
   });
 };
 

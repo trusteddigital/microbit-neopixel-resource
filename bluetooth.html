@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>micro:bit NeoPixel Designer (Bluetooth)</title>
+    <title>STEM Horizons - micro:bit Pixel Designer (Bluetooth)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -53,6 +53,7 @@
               <button id="fill-grid" type="button">Fill</button>
               <button id="clear-grid" type="button">Clear</button>
             </div>
+            <button id="reset-project" type="button" class="reset-btn">Start again</button>
           </div>
 
           <p class="paint-hint">Left-click to paint · Right-click to erase</p>
@@ -63,16 +64,21 @@
             <button id="connect-usb" type="button">Connect USB</button>
             <button id="connect-bluetooth" type="button">Connect Bluetooth</button>
           </div>
+          <button id="flash-player" type="button" disabled>Flash BLE player (once)</button>
           <button id="push-button" class="push-btn" type="button" disabled>Update micro:bit</button>
           <p id="status" aria-live="polite">Status: waiting for connection.</p>
+          <p class="paint-hint">
+            First time: Connect USB → Flash BLE player (custom CODAL hex).
+            Then Connect Bluetooth → Send over Bluetooth. Animations survive power-off.
+          </p>
 
           <details class="preview">
-            <summary>MicroPython preview</summary>
+            <summary>MicroPython preview (USB flash only)</summary>
             <pre id="python-preview"></pre>
           </details>
 
           <details class="preview">
-            <summary>micro:bit serial log</summary>
+            <summary>micro:bit serial / UART log</summary>
             <div class="serial-actions">
               <button id="serial-reboot" type="button" disabled>Reboot &amp; capture</button>
               <button id="serial-clear" type="button">Clear</button>
@@ -87,7 +93,7 @@
           <span class="tool-label">Animation</span>
           <button id="add-frame" type="button">+ Add frame</button>
           <span id="frame-count" class="frame-count">1 frame</span>
-          <span class="film-strip__hint">A = next · B = previous on the micro:bit</span>
+          <span class="film-strip__hint">Tap A/B to step · hold to play at 10 fps</span>
         </div>
         <div id="frames-list" class="frames-list"></div>
       </section>
